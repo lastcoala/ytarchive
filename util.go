@@ -975,6 +975,7 @@ func GetFFmpegArgs(audioFile, videoFile, thumbnail, fileDir, fileName string, on
 		}
 	}
 
+	ffmpegArgs = append(ffmpegArgs, "-shortest")
 	ffmpegArgs = append(ffmpegArgs, mergeFile)
 
 	return FFMpegArgs{

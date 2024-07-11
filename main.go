@@ -366,55 +366,57 @@ FORMAT TEMPLATE OPTIONS
 }
 
 var (
-	cliFlags          *flag.FlagSet
-	info              *DownloadInfo
-	cookieFile        string
-	fnameFormat       string
-	gvAudioUrl        string
-	gvVideoUrl        string
-	tempDir           string
-	ffmpegPath        string
-	proxyUrl          *url.URL
-	threadCount       uint
-	fragMaxTries      uint
-	filePerms         uint
-	dirPerms          uint
-	retrySecs         int
-	downloadThumbnail bool
-	addMeta           bool
-	writeDesc         bool
-	writeThumbnail    bool
-	writeMuxCmd       bool
-	quiet             bool
-	errLog            bool
-	warn              bool
-	verbose           bool
-	debug             bool
-	trace             bool
-	noFragFiles       bool
-	forceIPv4         bool
-	forceIPv6         bool
-	showHelp          bool
-	showVersion       bool
-	doWait            bool
-	noWait            bool
-	doMerge           bool
-	noMerge           bool
-	doSaveFiles       bool
-	noSaveFiles       bool
-	doSaveState       bool
-	noSaveState       bool
-	audioOnly         bool
-	videoOnly         bool
-	mkv               bool
-	statusNewlines    bool
-	keepTSFiles       bool
-	separateAudio     bool
-	monitorChannel    bool
-	vp9               bool
-	h264              bool
-	membersOnly       bool
-	disableSaveState  bool
+	cliFlags            *flag.FlagSet
+	info                *DownloadInfo
+	cookieFile          string
+	fnameFormat         string
+	gvAudioUrl          string
+	gvVideoUrl          string
+	tempDir             string
+	ffmpegPath          string
+	proxyUrl            *url.URL
+	threadCount         uint
+	fragMaxTries        uint
+	filePerms           uint
+	dirPerms            uint
+	retrySecs           int
+	downloadThumbnail   bool
+	addMeta             bool
+	writeDesc           bool
+	writeThumbnail      bool
+	writeMuxCmd         bool
+	quiet               bool
+	errLog              bool
+	warn                bool
+	verbose             bool
+	debug               bool
+	trace               bool
+	noFragFiles         bool
+	forceIPv4           bool
+	forceIPv6           bool
+	showHelp            bool
+	showVersion         bool
+	doWait              bool
+	noWait              bool
+	doMerge             bool
+	noMerge             bool
+	doSaveFiles         bool
+	noSaveFiles         bool
+	doSaveState         bool
+	noSaveState         bool
+	audioOnly           bool
+	videoOnly           bool
+	mkv                 bool
+	statusNewlines      bool
+	keepTSFiles         bool
+	separateAudio       bool
+	monitorChannel      bool
+	vp9                 bool
+	h264                bool
+	membersOnly         bool
+	disableSaveState    bool
+	totalDurationSecs   int
+	liveMaximumSeekable int
 
 	cancelled = false
 )
@@ -483,6 +485,8 @@ func init() {
 	cliFlags.UintVar(&dirPerms, "directory-permissions", 0755, "Filesystem permissions for the created directories.")
 	cliFlags.UintVar(&filePerms, "fp", 0644, "Filesystem permissions for the created files.")
 	cliFlags.UintVar(&filePerms, "file-permissions", 0644, "Filesystem permissions for the created files.")
+	cliFlags.IntVar(&totalDurationSecs, "total-duration", 0, "Total duration of the stream in seconds.")
+	cliFlags.IntVar(&liveMaximumSeekable, "live-maximum-seekable", 0, "Maximum number of seconds back the stream can be seeked.")
 
 	cliFlags.Func("video-url", "Googlevideo URL for the video stream.", func(s string) error {
 		var itag int
@@ -554,6 +558,9 @@ func run() int {
 	info.FileMode = os.FileMode(filePerms)
 	info.DirMode = os.FileMode(dirPerms)
 	info.DisableSaveState = disableSaveState
+
+	info.TotalDurationSecs = totalDurationSecs
+	info.LiveMaximumSeekable = liveMaximumSeekable
 
 	if doWait {
 		info.Wait = ActionDo
@@ -879,6 +886,15 @@ func run() int {
 			}
 
 			info.SetStatus(status)
+
+			fragmentDownloaded := info.DLState[info.Quality].Fragments
+			if info.DLState[AudioItag].Fragments < fragmentDownloaded {
+				fragmentDownloaded = info.DLState[AudioItag].Fragments
+			}
+
+			if info.TotalDurationSecs > 0 && fragmentDownloaded > info.TotalDurationSecs/5 {
+				sigChan <- os.Interrupt
+			}
 		case <-sigChan:
 			signal.Reset(os.Interrupt)
 			info.Stop()
@@ -1046,6 +1062,7 @@ func run() int {
 	}
 
 	LogGeneral("Muxing final file...")
+	LogGeneral("%s %s", ffmpegPath, ffmpegArgs.Args)
 	fRetcode := Execute(ffmpegPath, ffmpegArgs.Args)
 	if fRetcode != 0 {
 		retcode = fRetcode

@@ -23,7 +23,7 @@ const (
 	BufferSize            = 8192
 	DefaultFilenameFormat = "%(title)s-%(id)s"
 	// 5 days in seconds
-	LiveMaximumSeekable = 432000
+	LiveMaximumSeekable = 64800
 )
 
 type VideoItag struct {
@@ -175,14 +175,17 @@ type DownloadInfo struct {
 	SelectedQuality string
 	Status          string
 
-	FragMaxTries   uint
-	Wait           int
-	Quality        int
-	RetrySecs      int
-	Jobs           int
-	TargetDuration int
-	LastSq         int
-	LastUpdated    time.Time
+	FragMaxTries        uint
+	Wait                int
+	Quality             int
+	RetrySecs           int
+	Jobs                int
+	TargetDuration      int
+	LastSq              int
+	LastUpdated         time.Time
+	TotalDurationSecs   int
+	LiveMaximumSeekable int
+	LastSequence        int
 
 	MDLInfo map[string]*MediaDLInfo
 	DLState map[int]*DownloadState
@@ -1027,15 +1030,27 @@ func (di *DownloadInfo) DownloadStream(dataType, dataFile string, progressChan c
 		f, err = os.Create(dataFile)
 	}
 
+	liveMaximumSeekable := LiveMaximumSeekable
+	if di.LiveMaximumSeekable > 0 {
+		liveMaximumSeekable = di.LiveMaximumSeekable
+	}
+
 	if di.LastSq >= 0 {
-		curFrag = di.LastSq - (LiveMaximumSeekable / (di.TargetDuration))
+		curFrag = di.LastSq - (liveMaximumSeekable / (di.TargetDuration))
 		maxSeqs = di.LastSq
 	}
+
+	// if di.TotalDurationSecs > 0 {
+	// 	//maxSeqs = curFrag + (di.TotalDurationSecs / di.TargetDuration)
+	// 	di.LastSequence = curFrag + (di.TotalDurationSecs / di.TargetDuration)
+	// }
+
+	LogWarn("hello %d %d", curFrag, maxSeqs)
 
 	if curFrag < di.DLState[itag].Fragments {
 		curFrag = di.DLState[itag].Fragments
 	} else if curFrag > 0 {
-		LogWarn("%s: YT only retains the livestream 5 days past for seeking, starting from sequence %d (latest is %d)", dataType, curFrag, di.LastSq)
+		LogWarn("%s: YT only retains the livestream 5 days past for seeking, starting from sequence %d (latest is %d) (max is %d)", dataType, curFrag, di.LastSq, maxSeqs)
 		startFrag = curFrag
 	} else {
 		curFrag = 0
@@ -1085,6 +1100,12 @@ func (di *DownloadInfo) DownloadStream(dataType, dataFile string, progressChan c
 				if !downloading || stopping || closed {
 					continue
 				}
+
+				// if data.XHeadSeqNum > maxSeqs && di.TotalDurationSecs > 0 {
+				// 	LogWarn("stoooooooooooooping %d %d", data.XHeadSeqNum, maxSeqs)
+				// 	di.Stop()
+				// 	break getData
+				// }
 
 				if data.XHeadSeqNum > maxSeqs {
 					maxSeqs = data.XHeadSeqNum

@@ -12,7 +12,8 @@ dist/
 *.json
 *.txt
 getvinfo.py
-*.sh
 ytarchive
 *.exe
 *.zip
+*.m4a
+*.mp4
